@@ -31,7 +31,7 @@ class Controller_Example extends Controller
         {
             $person->get_form();
             if (!$person->check())
-                echo join('<br />', $person->errors(NULL));
+                echo join('&lt;br /&gt;', $person->errors(NULL));
             else
                 $person->save();
         }        
@@ -65,6 +65,10 @@ class Model_Person extends ORM_Form
 {
     const GENDER_MALE   = 0;
     const GENDER_FEMALE = 1;
+    
+    protected $_form_labels = array(
+        'company_id' => 'Company',
+    );
 
     protected $_rules = array(
         'first_name' => array(
