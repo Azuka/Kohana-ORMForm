@@ -65,6 +65,10 @@ class Model_Person extends ORM_Form
 {
     const GENDER_MALE   = 0;
     const GENDER_FEMALE = 1;
+    
+    protected $_form_labels = array(
+        'company_id' => 'Company',
+    );
 
     protected $_rules = array(
         'first_name' => array(
