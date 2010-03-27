@@ -7,6 +7,8 @@
  * @copyright  (c) 2009 CongregateOnline.com
  * @license    http://zatechcorp.com/license.html
  * @tutorial   <code>$test = ORM::factory('test');<br />$test->setup_form($_POST);<br />$test->generate_form('field1', 'field2', field3');</code>
+ *
+ * @method Kohana_ORM_Form where() where(string $column, string $operator, mixed $value)
  */
 class Kohana_ORM_Form extends ORM
 {
@@ -202,7 +204,7 @@ class Kohana_ORM_Form extends ORM
                 }
             }
 
-            $this->_labels += array_map(array($this, 'format_labels'), $this->_form_labels);
+            $this->_labels += array_map(array($this, '_format_labels'), $this->_form_labels);
             $this->_inited = true;
         }
     }
@@ -473,15 +475,7 @@ class Kohana_ORM_Form extends ORM
                             'id' => $this->field_id($field) . '_year',
                         )
                     )
-                )
-                . ' ' .
-                (in_array($field, $this->_date_none) ? '' :
-                View::factory('congregate/scripts/datepicker')
-                ->set('id', $this->field_id($field) . 'd')
-                ->set('month',  $this->field_id($field))
-                ->set('day',  $this->field_id($field) . '_day')
-                ->set('year',  $this->field_id($field) . '_year')
-                ->render());
+                );
         }
         // Datetime field
         elseif ($type === 'datetime')
@@ -555,14 +549,36 @@ class Kohana_ORM_Form extends ORM
                         )
                     )
                 )
+				. ' ' .
+				Form::select(
+                    $this->field_name($field) . '[hour]',
+                    (Kohana::config('formo.hours')),
+                    $hour,
+                    $attributes +
+                    array(
+                        'id' => $this->field_id($field),
+                    )
+                )
                 . ' ' .
-                (in_array($field, $this->_date_none) ? '' :
-                View::factory('congregate/scripts/datepicker')
-                ->set('id', $this->field_id($field) . 'd')
-                ->set('month',  $this->field_id($field))
-                ->set('day',  $this->field_id($field) . '_day')
-                ->set('year',  $this->field_id($field) . '_year')
-                ->__toString());
+                Form::select(
+                    $this->field_name($field) . '[minute]',
+                    (Kohana::config('formo.minutes')),
+                    $minute,
+                    $attributes +
+                    array(
+                        'id' => $this->field_id($field) . '_minute',
+                    )
+                )
+                . ' ' .
+                Form::select(
+                    $this->field_name($field) . '[meridien]',
+                    Kohana::config('formo.meridiens'),
+                    $meridien,
+                    $attributes +
+                    array(
+                        'id' => $this->field_id($field) . '_meridien',
+                    )
+                );
         }
         // Time field
         elseif ($type === 'time')
@@ -675,10 +691,9 @@ class Kohana_ORM_Form extends ORM
                 continue;
             }
 
-
-            if ($this->empty_pk() && !isset($_POST[$this->_orm_name][$field]) && strpos('tinyint', $type) === false && !in_array($type, array('date', 'datetime', 'time')))
+            if ($this->empty_pk() && !isset($_POST[$this->_orm_name][$field]) && strpos($type, 'tinyint') === false && !in_array($type, array('date', 'datetime', 'time')))
                 continue;
-            elseif ($this->pk() && !isset($_POST[$this->_orm_name][$this->pk()][$field]) && strpos('tinyint', $type) === false && !in_array($type, array('date', 'datetime', 'time')))
+            elseif ($this->pk() && !isset($_POST[$this->_orm_name][$this->pk()][$field]) && strpos($type, 'tinyint') === false && !in_array($type, array('date', 'datetime', 'time')))
                 continue;
 
             if (in_array($field, $this->_exclude))
@@ -786,7 +801,7 @@ class Kohana_ORM_Form extends ORM
 
                 continue;
             }
-            if (strpos('tinyint', $type) !== false)
+            if (strpos($type, 'tinyint') !== false && !isset($this->_choices[$field]))
             {
                 $this->$field = Arr::path($_POST, $this->field_path($field)) ? 1 : 0;
                 continue;
@@ -794,6 +809,9 @@ class Kohana_ORM_Form extends ORM
 
             $this->$field = Arr::path($_POST, $this->field_path($field));
         }
+
+        //echo Kohana::debug($_POST, $this->as_array());
+        //exit;
 
         return $this;
 
@@ -1254,6 +1272,54 @@ class Kohana_ORM_Form extends ORM
             $this->join(array($target->_table_name, $this->_db->table_prefix() . $target_path), 'LEFT')->on($join_col1, '=', $join_col2);
 
             return $this;
+    }
+
+    public function load_all()
+    {
+		if ( ! empty($this->_load_with))
+		{
+			foreach ($this->_load_with as $alias)
+			{
+				// Bind relationship
+				$this->with($alias);
+			}
+		}
+
+        $this->_db_builder = DB::select("{$this->_table_name}.*");
+
+		// Process pending database method calls
+		foreach ($this->_db_pending as $method)
+		{
+			$name = $method['name'];
+			$args = $method['args'];
+
+			$this->_db_applied[$name] = $name;
+
+			switch (count($args))
+			{
+				case 0:
+					$this->_db_builder->$name();
+				break;
+				case 1:
+					$this->_db_builder->$name($args[0]);
+				break;
+				case 2:
+					$this->_db_builder->$name($args[0], $args[1]);
+				break;
+				case 3:
+					$this->_db_builder->$name($args[0], $args[1], $args[2]);
+				break;
+				case 4:
+					$this->_db_builder->$name($args[0], $args[1], $args[2], $args[3]);
+				break;
+				default:
+					// Here comes the snail...
+					call_user_func_array(array($this->_db_builder, $name), $args);
+				break;
+			}
+		}
+
+		return $this->_load_result(TRUE);
     }
 
 }
